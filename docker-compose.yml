@@ -1,0 +1,25 @@
+services:
+  healthyme:
+    build: .
+    container_name: healthyme-app
+    restart: unless-stopped
+    ports:
+      - "4228:4228"
+    environment:
+      - PORT=4228
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - DB_PATH=/app/server/data/healthyme.sqlite
+    volumes:
+      # Persistent SQLite database storage
+      - healthyme_data:/app/server/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4228/api/healthcheck').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  healthyme_data:
+    driver: local

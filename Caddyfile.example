@@ -1,0 +1,13 @@
+# Caddyfile Example for Caddy 2 Reverse Proxy
+# Caddy automatically provisions and renews Let's Encrypt SSL certificates!
+
+health.yourdomain.com {
+    reverse_proxy localhost:4228 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    encode gzip zstd
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+.env
+# Keep database directory but ignore temporary wal/shm
+server/data/*.sqlite-wal
+server/data/*.sqlite-shm
