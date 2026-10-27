@@ -35,6 +35,7 @@ export default function App() {
   const [healthData, setHealthData] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [serverConnected, setServerConnected] = useState(true);
 
   // Food logger modal state
   const [activeLogMeal, setActiveLogMeal] = useState(null); // { mealType, mealTitle }
@@ -54,8 +55,10 @@ export default function App() {
       setNutritionData(nutRes);
       setTrendsData(trendsRes);
       setHealthData(healthRes);
+      setServerConnected(true);
     } catch (err) {
-      console.error('Error loading day data:', err);
+      console.warn('Error loading day data from server:', err.message);
+      setServerConnected(false);
     } finally {
       setLoading(false);
     }
@@ -137,6 +140,7 @@ export default function App() {
       <Header
         currentView={currentView}
         title={headerTitle}
+        serverOnline={serverConnected}
         onNavigate={(view) => {
           if (view === 'settings') {
             setShowSettings(true);
@@ -145,6 +149,19 @@ export default function App() {
           }
         }}
       />
+
+      {/* Reconnect notice if server connection drops */}
+      {!serverConnected && (
+        <div className="bg-rose-500/15 border-b border-rose-500/30 px-4 py-2 flex items-center justify-between text-xs text-rose-300">
+          <span>Connection to HealthyMe server on port 4228 lost.</span>
+          <button
+            onClick={() => loadDayData(currentDate)}
+            className="px-2.5 py-0.5 rounded-full bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 font-bold transition"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-2 pb-12">

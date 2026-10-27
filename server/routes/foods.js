@@ -1,14 +1,30 @@
 import express from 'express';
 import db from '../db.js';
 import { searchOpenFoodFacts, getProductByBarcode } from '../openfoodfacts.js';
+import { searchWebNutrition } from '../nutritionScraper.js';
 
 const router = express.Router();
 
-// Search foods across local DB and OpenFoodFacts API
+// Helper to expand common spelling variations (e.g. idly <-> idli)
+function getQueryVariants(q) {
+  const clean = q.trim().toLowerCase();
+  const variants = [clean];
+
+  if (clean === 'idly') variants.push('idli');
+  if (clean === 'idli') variants.push('idly');
+  if (clean === 'dosa') variants.push('dosai');
+  if (clean === 'dosai') variants.push('dosa');
+  if (clean === 'chapati' || clean === 'chapatti') variants.push('roti');
+  if (clean === 'roti') variants.push('chapati');
+
+  return variants;
+}
+
+// Search foods across: Local DB + Web Scraper (Cooked Meals / Real Dishes) + OpenFoodFacts
 router.get('/search', async (req, res) => {
   try {
-    const query = (req.query.q || '').trim();
-    if (!query) {
+    const rawQuery = (req.query.q || '').trim();
+    if (!rawQuery) {
       // Return top favorites and recent foods if query is empty
       const defaultFoods = db.prepare(`
         SELECT * FROM foods 
@@ -18,40 +34,95 @@ router.get('/search', async (req, res) => {
       return res.json({ query: '', results: defaultFoods, source: 'local' });
     }
 
-    // 1. Search local SQLite DB
-    const searchPattern = `%${query}%`;
-    const localFoods = db.prepare(`
-      SELECT * FROM foods 
-      WHERE name LIKE ? OR brand LIKE ? OR category LIKE ?
-      ORDER BY is_favorite DESC, (name LIKE ?) DESC
-      LIMIT 30
-    `).all(searchPattern, searchPattern, searchPattern, `${query}%`);
+    const queryVariants = getQueryVariants(rawQuery);
+    const primaryQuery = queryVariants[0];
 
-    // 2. Search OpenFoodFacts API in parallel
-    let offResults = [];
-    try {
-      offResults = await searchOpenFoodFacts(query);
-    } catch (e) {
-      console.warn('OpenFoodFacts search error:', e.message);
+    // 1. Search local SQLite DB with query variants
+    let localFoods = [];
+    for (const v of queryVariants) {
+      const searchPattern = `%${v}%`;
+      const matches = db.prepare(`
+        SELECT * FROM foods 
+        WHERE name LIKE ? OR brand LIKE ? OR category LIKE ?
+        ORDER BY is_favorite DESC, (name LIKE ?) DESC
+        LIMIT 30
+      `).all(searchPattern, searchPattern, searchPattern, `${v}%`);
+      localFoods.push(...matches);
     }
 
-    // 3. Merge results, local first, avoiding duplicates by ID or exact name
-    const seenIds = new Set(localFoods.map(f => f.id));
-    const seenNames = new Set(localFoods.map(f => f.name.toLowerCase().trim()));
-    const combined = [...localFoods];
-
-    for (const off of offResults) {
-      if (!seenIds.has(off.id) && !seenNames.has(off.name.toLowerCase().trim())) {
-        seenIds.add(off.id);
-        seenNames.add(off.name.toLowerCase().trim());
-        combined.push(off);
+    // Deduplicate local foods
+    const uniqueLocal = [];
+    const localSeen = new Set();
+    for (const f of localFoods) {
+      if (!localSeen.has(f.id)) {
+        localSeen.add(f.id);
+        uniqueLocal.push(f);
       }
     }
 
+    // 2. Run Web Scraper and OpenFoodFacts in parallel
+    const [scrapedResults, offResults] = await Promise.all([
+      searchWebNutrition(primaryQuery).catch(e => {
+        console.warn('Scraper error:', e.message);
+        return [];
+      }),
+      searchOpenFoodFacts(primaryQuery).catch(e => {
+        console.warn('OpenFoodFacts search error:', e.message);
+        return [];
+      })
+    ]);
+
+    // 3. Intelligent Ranking:
+    // Prioritize actual prepared foods (scraped and local favorites/staples)
+    // over raw packaged batters or ingredient flour mixes.
+    const combined = [];
+    const seenSignatures = new Set();
+    const isExplicitBatter = primaryQuery.includes('batter') || primaryQuery.includes('mix');
+
+    const addFood = (f) => {
+      const sig = `${f.name.toLowerCase().trim()}__${(f.brand || '').toLowerCase().trim()}`;
+      if (!seenSignatures.has(sig)) {
+        seenSignatures.add(sig);
+        combined.push(f);
+      }
+    };
+
+    // First: Scraped real cooked meals & prepared dishes (e.g. "Idli - 40 kcal, 1 piece")
+    for (const s of scrapedResults) {
+      const isBatter = s.name.toLowerCase().includes('batter') || s.name.toLowerCase().includes('mix');
+      if (!isBatter || isExplicitBatter) {
+        addFood(s);
+      }
+    }
+
+    // Second: Local favorites or exact staple matches
+    for (const f of uniqueLocal) {
+      const isBatter = f.name.toLowerCase().includes('batter') || f.name.toLowerCase().includes('mix');
+      if (!isBatter || isExplicitBatter) {
+        if (f.is_favorite || f.name.toLowerCase().includes(primaryQuery)) {
+          addFood(f);
+        }
+      }
+    }
+
+    // Third: Remaining cooked items
+    for (const s of scrapedResults) {
+      addFood(s);
+    }
+
+    // Fourth: Packaged goods from OpenFoodFacts & local cache
+    for (const f of uniqueLocal) {
+      addFood(f);
+    }
+    for (const off of offResults) {
+      addFood(off);
+    }
+
     res.json({
-      query,
+      query: rawQuery,
       results: combined,
       count: combined.length,
+      hasScrapedResults: scrapedResults.length > 0,
       hasOnlineResults: offResults.length > 0
     });
   } catch (err) {

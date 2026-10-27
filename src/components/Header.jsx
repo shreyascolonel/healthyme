@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3, Settings, ShieldCheck, ChevronLeft } from 'lucide-react';
 
-export default function Header({ currentView, onNavigate, title = 'Food' }) {
+export default function Header({ currentView, onNavigate, title = 'Food', serverOnline = true }) {
   const isSubView = currentView !== 'dashboard';
 
   return (
@@ -19,10 +19,16 @@ export default function Header({ currentView, onNavigate, title = 'Food' }) {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
             {title}
-            <span className="flex h-2 w-2 relative" title="Server Online (Reverse Proxy Ready)">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
+            {serverOnline ? (
+              <span className="flex h-2 w-2 relative" title="Backend Server Online on port 4228">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            ) : (
+              <span className="flex h-2 w-2 relative" title="Server Disconnected - ensure server is running on port 4228">
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+              </span>
+            )}
           </h1>
           {currentView === 'dashboard' && (
             <p className="text-xs text-neutral-400">Self-Hosted Health Tracker</p>

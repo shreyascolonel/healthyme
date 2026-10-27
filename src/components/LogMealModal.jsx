@@ -287,7 +287,7 @@ export default function LogMealModal({
         <form onSubmit={handleSearchSubmit} className="relative">
           <input
             type="text"
-            placeholder="Search OpenFoodFacts & local foods..."
+            placeholder="Search cooked dishes, home food, fruits, items..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -310,11 +310,11 @@ export default function LogMealModal({
           )}
         </form>
 
-        {/* Online API Indicator */}
-        {hasOnlineResults && (
+        {/* Online Multi-Engine Indicator */}
+        {searchResults.length > 0 && searchQuery && (
           <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-            <Globe2 className="w-3.5 h-3.5 shrink-0" />
-            <span>OpenFoodFacts API results loaded & cached locally</span>
+            <Sparkles className="w-3.5 h-3.5 shrink-0" />
+            <span>Refined nutrition engine active: Cooked meals, home dishes & packaged foods</span>
           </div>
         )}
 
@@ -404,9 +404,19 @@ export default function LogMealModal({
                             {food.brand}
                           </span>
                         )}
+                        {food.source === 'web_scraper' && (
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase border border-emerald-500/20">
+                            Cooked Dish
+                          </span>
+                        )}
                         {food.source === 'openfoodfacts' && (
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase">
-                            OFF
+                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase border border-amber-500/20">
+                            Packaged
+                          </span>
+                        )}
+                        {food.source === 'seed' && (
+                          <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded uppercase border border-cyan-500/20">
+                            Staple
                           </span>
                         )}
                       </div>
