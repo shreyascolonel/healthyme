@@ -1,7 +1,19 @@
 import express from 'express';
-import db from '../db.js';
+import db, { getUserProfile } from '../db.js';
+import { optionalAuth } from '../authMiddleware.js';
 
 const router = express.Router();
+router.use(optionalAuth);
+
+function getUserId(req) {
+  if (req.user && req.user.is_admin && req.query.spectate_user_id) {
+    const sId = parseInt(req.query.spectate_user_id, 10);
+    if (!isNaN(sId) && sId > 0) return sId;
+  }
+  if (req.user && req.user.id) return req.user.id;
+  const v = db.prepare('SELECT id FROM users WHERE username = ?').get('vinutha');
+  return v ? v.id : 1;
+}
 
 // Reference Recommended Daily Allowances (RDA) & Healthy Thresholds
 const NUTRIENT_STANDARDS = {
@@ -106,17 +118,18 @@ const NUTRIENT_STANDARDS = {
 // GET /api/nutrition?date=YYYY-MM-DD
 router.get('/', (req, res) => {
   try {
+    const userId = getUserId(req);
     const date = req.query.date || new Date().toISOString().split('T')[0];
     
-    // Fetch logs for date
+    // Fetch logs for user and date
     const logs = db.prepare(`
       SELECT * FROM meal_logs 
-      WHERE date = ? 
+      WHERE user_id = ? AND date = ? 
       ORDER BY logged_at ASC
-    `).all(date);
+    `).all(userId, date);
 
-    // Fetch user profile targets if custom
-    const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() || {};
+    // Fetch user profile targets
+    const profile = getUserProfile(userId);
     if (profile.protein_target_grams) NUTRIENT_STANDARDS.protein.target = profile.protein_target_grams;
     if (profile.carb_target_grams) NUTRIENT_STANDARDS.carbs.target = profile.carb_target_grams;
     if (profile.fat_target_grams) NUTRIENT_STANDARDS.fat.target = profile.fat_target_grams;

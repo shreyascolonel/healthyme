@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronRight } from 'lucide-react';
 
-export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrends }) {
+export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrends, onSelectDate }) {
   const dailyStats = trendsData?.dailyStats || [];
   const avgCalories = trendsData?.averageCalories || 2138;
   const targetCalories = trendsData?.targetCalories || 2138;
@@ -19,10 +19,13 @@ export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrend
       className="bg-[#181920] rounded-[28px] p-6 border border-[#262832] shadow-xl hover:border-neutral-600 transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-bold text-white tracking-wide">
-          Calorie intake over last 7 days
-        </h3>
-        <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-white group-hover:translate-x-0.5 transition" />
+        <div>
+          <h3 className="text-base font-bold text-white tracking-wide">
+            Calorie intake over last 7 days
+          </h3>
+          <p className="text-[11px] text-neutral-400 mt-0.5">Tap any day to view its meal logs</p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-neutral-400 group-hover:text-white group-hover:translate-x-0.5 transition shrink-0" />
       </div>
 
       <div className="relative pt-6 pb-2">
@@ -43,7 +46,16 @@ export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrend
             const barHeightPct = Math.min(100, Math.max(8, (day.calories / maxCal) * 100));
 
             return (
-              <div key={day.date} className="flex-1 flex flex-col items-center gap-2 group/bar">
+              <div
+                key={day.date}
+                onClick={(e) => {
+                  if (onSelectDate) {
+                    e.stopPropagation();
+                    onSelectDate(day.date);
+                  }
+                }}
+                className="flex-1 flex flex-col items-center gap-2 group/bar p-1 rounded-xl hover:bg-white/5 active:scale-95 transition"
+              >
                 {/* Bar */}
                 <div className="w-full flex justify-center items-end h-20">
                   <div
@@ -52,7 +64,7 @@ export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrend
                       isSelected
                         ? 'bg-emerald-400 shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/30'
                         : day.calories > 0
-                        ? 'bg-[#313444] hover:bg-neutral-500'
+                        ? 'bg-[#313444] group-hover/bar:bg-emerald-400/60'
                         : 'bg-[#22242e]'
                     }`}
                     title={`${day.date}: ${day.calories} kcal`}
@@ -62,7 +74,7 @@ export default function SevenDayTrendCard({ trendsData, currentDate, onOpenTrend
                 {/* Day Number Label */}
                 <span
                   className={`text-xs font-semibold ${
-                    isSelected ? 'text-emerald-400 font-bold' : 'text-neutral-500'
+                    isSelected ? 'text-emerald-400 font-bold' : 'text-neutral-500 group-hover/bar:text-neutral-300'
                   }`}
                 >
                   {day.dayNum}

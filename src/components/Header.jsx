@@ -1,11 +1,28 @@
 import React from 'react';
-import { BarChart3, Settings, ShieldCheck, ChevronLeft } from 'lucide-react';
+import { 
+  BarChart3, 
+  Settings, 
+  ShieldCheck, 
+  ChevronLeft, 
+  LogOut, 
+  User,
+  Eye
+} from 'lucide-react';
 
-export default function Header({ currentView, onNavigate, title = 'Food', serverOnline = true }) {
+export default function Header({ 
+  currentView, 
+  onNavigate, 
+  title = 'Food', 
+  serverOnline = true,
+  currentUser,
+  spectatingUser,
+  onOpenAdmin,
+  onLogout 
+}) {
   const isSubView = currentView !== 'dashboard';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#0d0e12]/90 backdrop-blur-md px-4 py-3 border-b border-[#23242c] flex items-center justify-between">
+    <header className="sticky top-0 z-30 bg-[#0d0e12]/90 backdrop-blur-md px-4 py-3 safe-top-p border-b border-[#23242c] flex items-center justify-between">
       <div className="flex items-center gap-3">
         {isSubView ? (
           <button
@@ -30,13 +47,39 @@ export default function Header({ currentView, onNavigate, title = 'Food', server
               </span>
             )}
           </h1>
-          {currentView === 'dashboard' && (
-            <p className="text-xs text-neutral-400">Self-Hosted Health Tracker</p>
+          {currentView === 'dashboard' && currentUser && (
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {spectatingUser ? (
+                <button
+                  onClick={onOpenAdmin}
+                  className="text-[11px] font-bold text-cyan-300 bg-cyan-500/15 border border-cyan-500/25 hover:bg-cyan-500/25 px-2 py-0.5 rounded-full inline-flex items-center gap-1 transition cursor-pointer"
+                  title="Click to switch spectated user or open admin"
+                >
+                  <Eye className="w-3 h-3 text-cyan-400" />
+                  <span>Spectating: {spectatingUser.display_name}</span>
+                </button>
+              ) : (
+                <p className="text-xs text-neutral-400">
+                  Logged in as <strong className="text-neutral-200">{currentUser.display_name || currentUser.username}</strong>
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
 
       <div className="flex items-center gap-1.5">
+        {/* Admin Button (Only visible if user has admin privileges) */}
+        {currentUser?.is_admin && (
+          <button
+            onClick={onOpenAdmin}
+            className="p-2.5 rounded-full hover:bg-emerald-500/10 text-emerald-400 transition active:scale-95 border border-emerald-500/20"
+            title="Admin Dashboard (Users & Foods)"
+          >
+            <ShieldCheck className="w-5 h-5" />
+          </button>
+        )}
+
         <button
           onClick={() => onNavigate(currentView === 'trends' ? 'dashboard' : 'trends')}
           className={`p-2.5 rounded-full transition active:scale-95 ${
@@ -56,6 +99,16 @@ export default function Header({ currentView, onNavigate, title = 'Food', server
         >
           <Settings className="w-5 h-5" />
         </button>
+
+        {currentUser && (
+          <button
+            onClick={onLogout}
+            className="p-2.5 rounded-full hover:bg-rose-500/10 text-neutral-400 hover:text-rose-400 transition active:scale-95"
+            title="Sign Out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        )}
       </div>
     </header>
   );

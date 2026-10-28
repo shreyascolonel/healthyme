@@ -1,15 +1,37 @@
 import express from 'express';
-import db from '../db.js';
+import db, { getUserProfile } from '../db.js';
+import { optionalAuth } from '../authMiddleware.js';
 
 const router = express.Router();
+router.use(optionalAuth);
+
+function getUserId(req) {
+  if (req.user && req.user.is_admin && req.query.spectate_user_id) {
+    const sId = parseInt(req.query.spectate_user_id, 10);
+    if (!isNaN(sId) && sId > 0) return sId;
+  }
+  if (req.user && req.user.id) return req.user.id;
+  const v = db.prepare('SELECT id FROM users WHERE username = ?').get('vinutha');
+  return v ? v.id : 1;
+}
+
+function shiftDate(dateStr, offsetDays) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + offsetDays);
+  const year = dt.getFullYear();
+  const month = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // GET /api/analytics/trends?period=days|weeks|months&date=YYYY-MM-DD
 router.get('/trends', (req, res) => {
   try {
+    const userId = getUserId(req);
     const period = req.query.period || 'days';
     const referenceDate = req.query.date || new Date().toISOString().split('T')[0];
 
-    const refTime = new Date(referenceDate).getTime();
     const daysCount = period === 'months' ? 30 : period === 'weeks' ? 14 : 7;
 
     // Collect daily stats for the timeframe
@@ -27,11 +49,11 @@ router.get('/trends', (req, res) => {
     };
 
     for (let i = daysCount - 1; i >= 0; i--) {
-      const d = new Date(refTime - i * 86400000).toISOString().split('T')[0];
-      const dayNum = new Date(d).getDate();
-      const dayName = new Date(d).toLocaleDateString('en-US', { weekday: 'short' });
+      const d = shiftDate(referenceDate, -i);
+      const [year, mon, dayNum] = d.split('-').map(Number);
+      const dayName = new Date(year, mon - 1, dayNum).toLocaleDateString('en-US', { weekday: 'short' });
 
-      const logs = db.prepare('SELECT * FROM meal_logs WHERE date = ?').all(d);
+      const logs = db.prepare('SELECT * FROM meal_logs WHERE user_id = ? AND date = ?').all(userId, d);
       
       let dayCal = 0;
       let dayCarb = 0;
@@ -96,7 +118,7 @@ router.get('/trends', (req, res) => {
     }
 
     // Get user profile target
-    const profile = db.prepare('SELECT calorie_target FROM user_profile WHERE id = 1').get() || { calorie_target: 2138 };
+    const profile = getUserProfile(userId);
 
     res.json({
       period,

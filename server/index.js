@@ -11,6 +11,8 @@ import nutritionRouter from './routes/nutrition.js';
 import analyticsRouter from './routes/analytics.js';
 import healthRouter from './routes/health.js';
 import settingsRouter from './routes/settings.js';
+import authRouter from './routes/auth.js';
+import adminRouter from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,6 +39,8 @@ app.use((req, res, next) => {
 });
 
 // API Routes
+app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/foods', foodsRouter);
 app.use('/api/logs', logsRouter);
 app.use('/api/nutrition', nutritionRouter);

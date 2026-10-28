@@ -55,8 +55,9 @@ export default function LogMealModal({
     name: '',
     brand: '',
     category: 'My Foods',
-    serving_size: '1 serving (100 g)',
+    serving_name: '1 serving',
     serving_size_grams: 100,
+    serving_size: '1 serving (100 g)',
     calories: '',
     carbs: '',
     fat: '',
@@ -75,6 +76,16 @@ export default function LogMealModal({
   // Food detail & quantity adjuster modal
   const [selectedFood, setSelectedFood] = useState(null);
   const [quantity, setQuantity] = useState(1.0);
+  const [portionMode, setPortionMode] = useState('servings'); // 'servings' | 'grams'
+  const [gramsInput, setGramsInput] = useState(100);
+
+  const handleOpenFoodDetail = (food) => {
+    setSelectedFood(food);
+    const baseG = food.serving_size_grams || 100;
+    setQuantity(1.0);
+    setGramsInput(baseG);
+    setPortionMode('servings');
+  };
 
   // Load initial favorites & custom foods
   useEffect(() => {
@@ -142,8 +153,7 @@ export default function LogMealModal({
       const product = await lookupBarcode(barcodeInput);
       if (product) {
         setShowBarcodeModal(false);
-        setSelectedFood(product);
-        setQuantity(1.0);
+        handleOpenFoodDetail(product);
       } else {
         alert('Product not found for barcode: ' + barcodeInput);
       }
@@ -173,11 +183,17 @@ export default function LogMealModal({
     e.preventDefault();
     if (!newFood.name || !newFood.calories) return;
     try {
-      const created = await createCustomFood(newFood);
+      const grams = parseFloat(newFood.serving_size_grams) || 100;
+      const servingLabel = `${newFood.serving_name || '1 serving'} (${grams} g)`;
+      const created = await createCustomFood({
+        ...newFood,
+        serving_size: servingLabel,
+        serving_size_grams: grams,
+        serving_unit: 'g'
+      });
       setShowCreateFoodModal(false);
       loadCustomFoods();
-      setSelectedFood(created);
-      setQuantity(1.0);
+      handleOpenFoodDetail(created);
     } catch (e) {
       alert('Failed to create food: ' + e.message);
     }
@@ -223,7 +239,7 @@ export default function LogMealModal({
   return (
     <div className="fixed inset-0 z-50 bg-[#0d0e12] overflow-y-auto flex flex-col">
       {/* Header (Screenshot 2: < Morning snack) */}
-      <header className="sticky top-0 z-20 bg-[#0d0e12]/95 backdrop-blur-md px-4 py-3 border-b border-[#23242c] flex items-center justify-between">
+      <header className="sticky top-0 z-20 bg-[#0d0e12]/95 backdrop-blur-md px-4 py-3 safe-top-p border-b border-[#23242c] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
@@ -238,14 +254,15 @@ export default function LogMealModal({
 
         <button
           onClick={() => setShowBarcodeModal(true)}
-          className="p-2.5 rounded-full hover:bg-white/10 text-neutral-300 hover:text-white transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#1e2029] hover:bg-[#282a35] border border-[#2d2f3c] text-xs font-semibold text-neutral-300 hover:text-white transition active:scale-95 shrink-0"
           title="Barcode Scanner / Lookup"
         >
-          <Barcode className="w-5 h-5" />
+          <Barcode className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Scan</span>
         </button>
       </header>
 
-      <div className="flex-1 max-w-xl mx-auto w-full p-4 space-y-5">
+      <div className="flex-1 max-w-xl mx-auto w-full p-4 space-y-5 safe-bottom-p">
         {/* "Choose how you want to log this meal" */}
         <div className="text-center pt-2 pb-1">
           <p className="text-xs text-neutral-400 font-medium">Choose how you want to log this meal.</p>
@@ -382,10 +399,7 @@ export default function LogMealModal({
               return (
                 <div
                   key={food.id}
-                  onClick={() => {
-                    setSelectedFood(food);
-                    setQuantity(1.0);
-                  }}
+                  onClick={() => handleOpenFoodDetail(food)}
                   className="bg-[#181920] hover:bg-[#20222b] rounded-2xl p-4 border border-[#262832] flex items-center justify-between gap-3 cursor-pointer transition active:scale-99 group"
                 >
                   <div className="flex items-center gap-3.5 flex-1 min-w-0">
@@ -394,41 +408,53 @@ export default function LogMealModal({
                       <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 opacity-0 group-hover:opacity-100 transition" />
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-white tracking-tight truncate">
-                          {food.name}
-                        </h4>
-                        {food.brand && (
-                          <span className="text-[10px] text-neutral-400 bg-[#242631] px-1.5 py-0.5 rounded truncate max-w-[120px]">
-                            {food.brand}
-                          </span>
-                        )}
+                    <div className="flex-1 min-w-0 pr-1">
+                      {/* Food Name: Full width, clean wrap on long titles, no premature truncate */}
+                      <h4 className="text-[15px] font-bold text-white tracking-tight leading-snug break-words">
+                        {food.name}
+                      </h4>
+
+                      {/* Badges & Brand Row */}
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                         {food.source === 'web_scraper' && (
-                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded uppercase border border-emerald-500/20">
+                          <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full uppercase border border-emerald-500/20 whitespace-nowrap shrink-0">
                             Cooked Dish
                           </span>
                         )}
                         {food.source === 'openfoodfacts' && (
-                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded uppercase border border-amber-500/20">
+                          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full uppercase border border-amber-500/20 whitespace-nowrap shrink-0">
                             Packaged
                           </span>
                         )}
                         {food.source === 'seed' && (
-                          <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded uppercase border border-cyan-500/20">
+                          <span className="text-[9px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-full uppercase border border-cyan-500/20 whitespace-nowrap shrink-0">
                             Staple
+                          </span>
+                        )}
+                        {food.source === 'custom' && (
+                          <span className="text-[9px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full uppercase border border-purple-500/20 whitespace-nowrap shrink-0">
+                            Custom
+                          </span>
+                        )}
+                        {food.brand && !food.brand.includes('Home-cooked') && (
+                          <span className="text-[10px] text-neutral-400 bg-[#242631] px-2 py-0.5 rounded-full truncate max-w-[150px]">
+                            {food.brand}
                           </span>
                         )}
                       </div>
 
-                      <p className="text-xs text-neutral-400 mt-0.5 font-medium">
-                        <strong className="text-neutral-200 font-semibold">{food.calories} kcal</strong>, {food.serving_size || '100 g'}
+                      {/* Serving & Calories */}
+                      <p className="text-xs text-neutral-300 mt-1 font-medium leading-normal">
+                        <strong className="text-white font-bold">{food.calories} kcal</strong>
+                        <span className="text-neutral-500 mx-1.5">•</span>
+                        <span className="text-neutral-400">{food.serving_size || '100 g'}</span>
                       </p>
 
-                      <div className="flex items-center gap-2 text-[10px] text-neutral-400 mt-1 font-mono">
-                        <span className="text-[#b388ff]">C: {food.carbs}g</span>
-                        <span className="text-[#ff7b72]">F: {food.fat}g</span>
-                        <span className="text-[#ffd54f]">P: {food.protein}g</span>
+                      {/* Macros */}
+                      <div className="flex items-center gap-2.5 text-[11px] text-neutral-400 mt-1 font-mono">
+                        <span className="text-[#b388ff] font-medium">C: {food.carbs}g</span>
+                        <span className="text-[#ff7b72] font-medium">F: {food.fat}g</span>
+                        <span className="text-[#ffd54f] font-medium">P: {food.protein}g</span>
                       </div>
                     </div>
                   </div>
@@ -436,7 +462,7 @@ export default function LogMealModal({
                   {/* Favorite star */}
                   <button
                     onClick={(e) => handleToggleFav(food, e)}
-                    className="p-2 text-neutral-500 hover:text-amber-400 transition"
+                    className="p-2 -mr-1 text-neutral-500 hover:text-amber-400 transition shrink-0"
                     title={isFav ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Star className={`w-5 h-5 ${isFav ? 'fill-amber-400 text-amber-400' : ''}`} />
@@ -467,42 +493,119 @@ export default function LogMealModal({
               </button>
             </div>
 
-            {/* Quantity Selector */}
-            <div className="bg-[#14151b] p-4 rounded-2xl border border-[#262832]">
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-xs font-semibold text-neutral-300">Number of Servings</span>
-                <span className="text-xl font-extrabold text-emerald-400 font-mono">
-                  {quantity}x
-                </span>
-              </div>
-
-              {/* Quick multipliers */}
-              <div className="flex gap-2 mb-3">
-                {[0.5, 1.0, 1.5, 2.0, 3.0].map((m) => (
+            {/* Quantity Selector with Servings & Grams auto-scaling */}
+            <div className="bg-[#14151b] p-4 rounded-2xl border border-[#262832] space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-semibold text-neutral-300">Portion Size</span>
+                
+                {/* Servings vs Grams Toggle */}
+                <div className="flex gap-1 bg-[#1c1d25] p-1 rounded-xl border border-[#2c2e3c]">
                   <button
-                    key={m}
                     type="button"
-                    onClick={() => setQuantity(m)}
-                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition ${
-                      quantity === m
-                        ? 'bg-emerald-500 text-neutral-950'
-                        : 'bg-[#22242e] text-neutral-300 hover:bg-[#2d2f3d]'
+                    onClick={() => {
+                      setPortionMode('servings');
+                      setGramsInput(Math.round(quantity * (selectedFood.serving_size_grams || 100)));
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      portionMode === 'servings' ? 'bg-emerald-500 text-neutral-950' : 'text-neutral-400 hover:text-white'
                     }`}
                   >
-                    {m}x
+                    By Servings
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPortionMode('grams');
+                      setGramsInput(Math.round(quantity * (selectedFood.serving_size_grams || 100)));
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      portionMode === 'grams' ? 'bg-emerald-500 text-neutral-950' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    By Grams (g)
+                  </button>
+                </div>
               </div>
 
-              <input
-                type="range"
-                min="0.25"
-                max="5.0"
-                step="0.25"
-                value={quantity}
-                onChange={(e) => setQuantity(parseFloat(e.target.value))}
-                className="w-full accent-emerald-400"
-              />
+              {portionMode === 'servings' ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-neutral-400">
+                      Total weight: <strong className="text-white font-mono">{Math.round(quantity * (selectedFood.serving_size_grams || 100))} g</strong>
+                    </span>
+                    <span className="text-xl font-extrabold text-emerald-400 font-mono">
+                      {quantity}x
+                    </span>
+                  </div>
+
+                  {/* Quick multipliers */}
+                  <div className="flex gap-2">
+                    {[0.5, 1.0, 1.5, 2.0, 3.0].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setQuantity(m);
+                          setGramsInput(Math.round(m * (selectedFood.serving_size_grams || 100)));
+                        }}
+                        className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          quantity === m
+                            ? 'bg-emerald-500 text-neutral-950'
+                            : 'bg-[#22242e] text-neutral-300 hover:bg-[#2d2f3d]'
+                        }`}
+                      >
+                        {m}x
+                      </button>
+                    ))}
+                  </div>
+
+                  <input
+                    type="range"
+                    min="0.25"
+                    max="5.0"
+                    step="0.25"
+                    value={quantity}
+                    onChange={(e) => {
+                      const q = parseFloat(e.target.value);
+                      setQuantity(q);
+                      setGramsInput(Math.round(q * (selectedFood.serving_size_grams || 100)));
+                    }}
+                    className="w-full accent-emerald-400 cursor-pointer"
+                  />
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="number"
+                        min="1"
+                        max="5000"
+                        value={gramsInput}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setGramsInput(val);
+                          const g = parseFloat(val) || 0;
+                          const baseG = selectedFood.serving_size_grams || 100;
+                          setQuantity(baseG > 0 ? Number((g / baseG).toFixed(2)) : 1.0);
+                        }}
+                        className="w-full bg-[#1c1d25] border border-[#2d2f3c] rounded-xl px-3 py-2 text-base font-mono text-white focus:outline-none focus:border-emerald-500"
+                        placeholder="e.g. 150"
+                      />
+                      <span className="absolute right-3 top-2.5 text-xs text-neutral-400 font-bold">grams</span>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-[10px] text-neutral-400 block font-mono">Calculated:</span>
+                      <span className="text-sm font-bold text-emerald-400 font-mono">{quantity}x serving</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-neutral-400">
+                    Scaled from original serving size: <strong className="text-neutral-300">{selectedFood.serving_size || `${selectedFood.serving_size_grams || 100} g`}</strong>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Recalculated Nutrition Snapshot */}
@@ -723,73 +826,122 @@ export default function LogMealModal({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-neutral-400 block mb-1">Brand</label>
+                  <label className="text-xs text-neutral-400 block mb-1">Brand / Style</label>
                   <input
                     type="text"
-                    placeholder="e.g. Homemade"
+                    placeholder="e.g. Homemade, Restaurant"
                     value={newFood.brand}
                     onChange={(e) => setNewFood({ ...newFood, brand: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400 block mb-1">Serving Size</label>
+                  <label className="text-xs text-neutral-400 block mb-1">Category</label>
                   <input
                     type="text"
-                    placeholder="e.g. 1 slice (120 g)"
-                    value={newFood.serving_size}
-                    onChange={(e) => setNewFood({ ...newFood, serving_size: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
+                    placeholder="e.g. Curries, Snacks"
+                    value={newFood.category}
+                    onChange={(e) => setNewFood({ ...newFood, category: e.target.value })}
+                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-4 gap-2">
-                <div>
-                  <label className="text-[11px] text-neutral-300 block mb-1">Calories *</label>
-                  <input
-                    type="number"
-                    placeholder="200"
-                    value={newFood.calories}
-                    onChange={(e) => setNewFood({ ...newFood, calories: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#b388ff] block mb-1">Carb (g)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="25"
-                    value={newFood.carbs}
-                    onChange={(e) => setNewFood({ ...newFood, carbs: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#ff7b72] block mb-1">Fat (g)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="8"
-                    value={newFood.fat}
-                    onChange={(e) => setNewFood({ ...newFood, fat: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-[#ffd54f] block mb-1">Protein (g)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    placeholder="4"
-                    value={newFood.protein}
-                    onChange={(e) => setNewFood({ ...newFood, protein: e.target.value })}
-                    className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
+              {/* Serving Size Definition */}
+              <div className="bg-[#14151b] p-3 rounded-2xl border border-[#262832] space-y-2">
+                <span className="text-xs font-bold text-neutral-300 block">Base Serving Size</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Serving Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 1 bowl, 1 plate, 1 piece"
+                      value={newFood.serving_name || '1 serving'}
+                      onChange={(e) => setNewFood({ ...newFood, serving_name: e.target.value })}
+                      className="w-full bg-[#1e2029] border border-[#2d2f3c] rounded-xl px-2.5 py-1.5 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-neutral-400 block mb-1">Weight / Volume (g)</label>
+                    <input
+                      type="number"
+                      placeholder="100"
+                      value={newFood.serving_size_grams || 100}
+                      onChange={(e) => setNewFood({ ...newFood, serving_size_grams: e.target.value })}
+                      className="w-full bg-[#1e2029] border border-[#2d2f3c] rounded-xl px-2.5 py-1.5 text-xs text-white"
+                      required
+                    />
+                  </div>
                 </div>
               </div>
+
+              <div>
+                <span className="text-xs font-bold text-neutral-300 block mb-1.5">
+                  Nutrition for this serving ({newFood.serving_name || '1 serving'} - {newFood.serving_size_grams || 100}g)
+                </span>
+                <div className="grid grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-[10px] text-neutral-300 block mb-1">Calories *</label>
+                    <input
+                      type="number"
+                      placeholder="200"
+                      value={newFood.calories}
+                      onChange={(e) => setNewFood({ ...newFood, calories: e.target.value })}
+                      className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-bold font-mono text-white focus:outline-none focus:border-emerald-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#b388ff] block mb-1">Carb (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="25"
+                      value={newFood.carbs}
+                      onChange={(e) => setNewFood({ ...newFood, carbs: e.target.value })}
+                      className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#ff7b72] block mb-1">Fat (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="8"
+                      value={newFood.fat}
+                      onChange={(e) => setNewFood({ ...newFood, fat: e.target.value })}
+                      className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#ffd54f] block mb-1">Protein (g)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="4"
+                      value={newFood.protein}
+                      onChange={(e) => setNewFood({ ...newFood, protein: e.target.value })}
+                      className="w-full bg-[#121318] border border-[#2d2f3c] rounded-xl px-2.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Auto 100g Preview */}
+              {newFood.calories && (
+                <div className="bg-[#14151b] p-2.5 rounded-xl border border-[#252632] text-[11px] text-neutral-400 flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Auto per 100g:
+                  </span>
+                  <span className="font-mono text-white">
+                    {Math.round((parseFloat(newFood.calories) || 0) * (100 / (parseFloat(newFood.serving_size_grams) || 100)))} kcal | 
+                    C:{((parseFloat(newFood.carbs) || 0) * (100 / (parseFloat(newFood.serving_size_grams) || 100))).toFixed(1)}g | 
+                    F:{((parseFloat(newFood.fat) || 0) * (100 / (parseFloat(newFood.serving_size_grams) || 100))).toFixed(1)}g | 
+                    P:{((parseFloat(newFood.protein) || 0) * (100 / (parseFloat(newFood.serving_size_grams) || 100))).toFixed(1)}g
+                  </span>
+                </div>
+              )}
 
               {/* Optional micronutrients */}
               <div className="grid grid-cols-3 gap-2 pt-1">

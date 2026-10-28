@@ -5,10 +5,15 @@ import CalorieSummaryCard from './components/CalorieSummaryCard';
 import MacroBreakdownCard from './components/MacroBreakdownCard';
 import MealSection from './components/MealSection';
 import SevenDayTrendCard from './components/SevenDayTrendCard';
+import WaterIntakeCard from './components/WaterIntakeCard';
 import NutritionDetailView from './components/NutritionDetailView';
 import TrendsView from './components/TrendsView';
 import LogMealModal from './components/LogMealModal';
 import SettingsModal from './components/SettingsModal';
+import LoginModal from './components/LoginModal';
+import ForceChangePasswordModal from './components/ForceChangePasswordModal';
+import AdminPanelModal from './components/AdminPanelModal';
+import { Eye } from 'lucide-react';
 
 import { 
   fetchDailyLogs, 
@@ -20,13 +25,29 @@ import {
   fetchHealthStats, 
   logWater, 
   logWeight,
-  fetchSettings 
+  fetchSettings,
+  fetchCurrentUser,
+  logout,
+  getStoredUser
 } from './services/api';
+import { getLocalDateString, shiftDateString } from './utils/dateUtils';
+import { startNotificationScheduler } from './utils/notifications';
 
 export default function App() {
-  const [currentDate, setCurrentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [currentUser, setCurrentUser] = useState(() => getStoredUser());
+  const [authChecked, setAuthChecked] = useState(false);
+  const [spectatingUser, setSpectatingUser] = useState(() => {
+    const user = getStoredUser();
+    if (user && user.is_admin) {
+      return { id: 2, username: 'vinutha', display_name: 'Vinutha' };
+    }
+    return null;
+  });
+
+  const [currentDate, setCurrentDate] = useState(() => getLocalDateString());
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'nutrition' | 'trends'
   const [showSettings, setShowSettings] = useState(false);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   // Core Data
   const [dailyData, setDailyData] = useState(null);
@@ -40,14 +61,33 @@ export default function App() {
   // Food logger modal state
   const [activeLogMeal, setActiveLogMeal] = useState(null); // { mealType, mealTitle }
 
-  // Load all daily data
-  const loadDayData = useCallback(async (date) => {
+  // Check initial user authentication
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const user = await fetchCurrentUser();
+        setCurrentUser(user);
+      } catch (e) {
+        console.warn('Auth check error:', e);
+      } finally {
+        setAuthChecked(true);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  const isSpectating = !!(currentUser?.is_admin && spectatingUser);
+
+  // Load all daily data for the current user or spectated user
+  const loadDayData = useCallback(async (date, overrideSpectateId = null) => {
+    if (!currentUser) return;
     try {
+      const sId = overrideSpectateId !== null ? overrideSpectateId : (currentUser?.is_admin && spectatingUser ? spectatingUser.id : null);
       const [logsRes, nutRes, trendsRes, healthRes] = await Promise.all([
-        fetchDailyLogs(date),
-        fetchNutritionBreakdown(date),
-        fetchAnalyticsTrends('days', date),
-        fetchHealthStats(date)
+        fetchDailyLogs(date, sId),
+        fetchNutritionBreakdown(date, sId),
+        fetchAnalyticsTrends('days', date, sId),
+        fetchHealthStats(date, sId)
       ]);
 
       setDailyData(logsRes);
@@ -56,17 +96,23 @@ export default function App() {
       setTrendsData(trendsRes);
       setHealthData(healthRes);
       setServerConnected(true);
+
+      if (logsRes?.profile) {
+        startNotificationScheduler(logsRes.profile);
+      }
     } catch (err) {
       console.warn('Error loading day data from server:', err.message);
       setServerConnected(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser, spectatingUser]);
 
   useEffect(() => {
-    loadDayData(currentDate);
-  }, [currentDate, loadDayData]);
+    if (currentUser && !currentUser.must_change_password) {
+      loadDayData(currentDate);
+    }
+  }, [currentDate, currentUser, spectatingUser, loadDayData]);
 
   // Handlers
   const handleDateChange = (newDate) => {
@@ -129,6 +175,46 @@ export default function App() {
     loadDayData(currentDate);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    setCurrentUser(null);
+    setDailyData(null);
+  };
+
+  // If auth is still checking on startup
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#0d0e12] flex items-center justify-center text-white">
+        <div className="animate-spin w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  // Not logged in -> Show Login Screen
+  if (!currentUser) {
+    return (
+      <LoginModal 
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          loadDayData(currentDate);
+        }} 
+      />
+    );
+  }
+
+  // Forced password change screen (on initial login or admin reset)
+  if (currentUser.must_change_password) {
+    return (
+      <ForceChangePasswordModal
+        user={currentUser}
+        onPasswordChanged={(updatedUser) => {
+          setCurrentUser(updatedUser);
+          loadDayData(currentDate);
+        }}
+      />
+    );
+  }
+
   // Header Title based on current view
   let headerTitle = 'Food';
   if (currentView === 'nutrition') headerTitle = 'Nutrition info';
@@ -141,6 +227,10 @@ export default function App() {
         currentView={currentView}
         title={headerTitle}
         serverOnline={serverConnected}
+        currentUser={currentUser}
+        spectatingUser={currentUser?.is_admin ? spectatingUser : null}
+        onOpenAdmin={() => setShowAdmin(true)}
+        onLogout={handleLogout}
         onNavigate={(view) => {
           if (view === 'settings') {
             setShowSettings(true);
@@ -149,6 +239,22 @@ export default function App() {
           }
         }}
       />
+
+      {/* Spectator Mode Banner for Admin */}
+      {currentUser?.is_admin && spectatingUser && (
+        <div className="bg-cyan-950/40 border-b border-cyan-500/20 px-4 py-2 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-cyan-300">
+            <Eye className="w-4 h-4 text-cyan-400 shrink-0" />
+            <span>Spectating: <strong className="text-white">{spectatingUser.display_name}</strong> (@{spectatingUser.username})</span>
+          </div>
+          <button
+            onClick={() => setShowAdmin(true)}
+            className="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 hover:bg-cyan-500/20 px-2.5 py-1 rounded-lg transition cursor-pointer"
+          >
+            Switch User / Manage &rarr;
+          </button>
+        </div>
+      )}
 
       {/* Reconnect notice if server connection drops */}
       {!serverConnected && (
@@ -164,7 +270,7 @@ export default function App() {
       )}
 
       {/* Main Container */}
-      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-2 pb-12">
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 pt-2 pb-12 safe-bottom-p">
         {loading && !dailyData ? (
           <div className="py-24 text-center">
             <div className="animate-spin w-8 h-8 border-2 border-emerald-400 border-t-transparent rounded-full mx-auto mb-3"></div>
@@ -175,11 +281,27 @@ export default function App() {
             {/* View 1: Main Dashboard (Screenshots 1 & 5) */}
             {currentView === 'dashboard' && (
               <div className="space-y-4">
-                {/* Date Navigator (Mon, 26 Oct) */}
+                {/* Date Navigator */}
                 <DateNavigator
                   currentDate={currentDate}
                   onDateChange={handleDateChange}
                 />
+
+                {/* Friendly banner when viewing Today with 0 logs */}
+                {currentDate === getLocalDateString() && (dailyData?.dailyTotals?.calories || 0) === 0 && (
+                  <div className="bg-[#181920] border border-[#272935] rounded-2xl px-4 py-3 flex items-center justify-between text-xs shadow-md">
+                    <div className="flex items-center gap-2 text-neutral-300">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                      <span>No food logged today yet</span>
+                    </div>
+                    <button
+                      onClick={() => handleDateChange(shiftDateString(currentDate, -1))}
+                      className="text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 bg-emerald-500/10 hover:bg-emerald-500/20 px-2.5 py-1 rounded-lg transition"
+                    >
+                      View Yesterday &rarr;
+                    </button>
+                  </div>
+                )}
 
                 {/* Calorie Card with Optimal Intake Range */}
                 <CalorieSummaryCard
@@ -200,13 +322,22 @@ export default function App() {
                   enabledMeals={dailyData?.enabledMeals}
                   onAddFood={handleOpenAddFood}
                   onDeleteLog={handleDeleteLog}
+                  isSpectating={isSpectating}
                 />
 
-                {/* 7-Day Calorie Sparkline Card (Screenshot 5) */}
+                {/* Water Intake Tracker Card */}
+                <WaterIntakeCard
+                  healthData={healthData}
+                  onLogWater={handleLogWater}
+                  isSpectating={isSpectating}
+                />
+
+                {/* 7-Day Calorie Sparkline Card */}
                 <SevenDayTrendCard
                   trendsData={trendsData}
                   currentDate={currentDate}
                   onOpenTrends={() => setCurrentView('trends')}
+                  onSelectDate={handleDateChange}
                 />
               </div>
             )}
@@ -258,6 +389,18 @@ export default function App() {
           profile={profile}
           onClose={() => setShowSettings(false)}
           onSaved={handleSettingsSaved}
+        />
+      )}
+
+      {/* Modal: Admin Dashboard */}
+      {showAdmin && currentUser?.is_admin && (
+        <AdminPanelModal
+          currentUser={currentUser}
+          onClose={() => setShowAdmin(false)}
+          onSpectateUser={(user) => {
+            setSpectatingUser(user);
+            loadDayData(currentDate, user.id);
+          }}
         />
       )}
     </div>

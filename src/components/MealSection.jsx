@@ -57,7 +57,8 @@ export default function MealSection({
   enabledMeals = Object.keys(MEAL_CONFIGS), 
   onAddFood, 
   onDeleteLog,
-  onEditLog 
+  onEditLog,
+  isSpectating = false
 }) {
   const [expandedMeal, setExpandedMeal] = useState(null);
 
@@ -164,13 +165,15 @@ export default function MealSection({
                     </button>
                   )}
 
-                  <button
-                    onClick={() => onAddFood(mealType, config.title)}
-                    className="w-10 h-10 rounded-full bg-[#232530] hover:bg-[#2e3140] active:scale-95 text-neutral-200 hover:text-white flex items-center justify-center border border-[#303342] transition shadow-sm"
-                    title={`Add food to ${config.title}`}
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
+                  {!isSpectating && (
+                    <button
+                      onClick={() => onAddFood(mealType, config.title)}
+                      className="w-10 h-10 rounded-full bg-[#232530] hover:bg-[#2e3140] active:scale-95 text-neutral-200 hover:text-white flex items-center justify-center border border-[#303342] transition shadow-sm cursor-pointer"
+                      title={`Add food to ${config.title}`}
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -194,15 +197,17 @@ export default function MealSection({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() => onDeleteLog(item.id)}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-                          title="Remove item"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {!isSpectating && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => onDeleteLog(item.id)}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                            title="Delete entry"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

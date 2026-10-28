@@ -2,8 +2,10 @@ import express from 'express';
 import db from '../db.js';
 import { searchOpenFoodFacts, getProductByBarcode } from '../openfoodfacts.js';
 import { searchWebNutrition } from '../nutritionScraper.js';
+import { optionalAuth } from '../authMiddleware.js';
 
 const router = express.Router();
+router.use(optionalAuth);
 
 // Helper to expand common spelling variations (e.g. idly <-> idli)
 function getQueryVariants(q) {
@@ -158,19 +160,26 @@ router.post('/favorite/:id', (req, res) => {
   }
 });
 
-// Get user custom foods ("My foods")
+// Get user custom foods ("My foods") - Shared across all users!
 router.get('/custom', (req, res) => {
   try {
-    const customFoods = db.prepare('SELECT * FROM foods WHERE is_custom = 1 ORDER BY created_at DESC').all();
+    const customFoods = db.prepare(`
+      SELECT f.*, u.display_name as creator_name
+      FROM foods f
+      LEFT JOIN users u ON f.created_by_user_id = u.id
+      WHERE f.is_custom = 1 OR f.source = 'custom'
+      ORDER BY f.created_at DESC
+    `).all();
     res.json(customFoods);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Create new custom food
+// Create new custom food - Shared with all users
 router.post('/custom', (req, res) => {
   try {
+    const userId = req.user ? req.user.id : null;
     const {
       name, brand, category, serving_size, serving_size_grams, serving_unit,
       calories, carbs, fat, protein, fiber, sugar, saturated_fat,
@@ -187,11 +196,11 @@ router.post('/custom', (req, res) => {
       INSERT INTO foods (
         id, name, brand, category, serving_size, serving_size_grams, serving_unit,
         calories, carbs, fat, protein, fiber, sugar, saturated_fat,
-        sodium, potassium, calcium, iron, vitamin_a, vitamin_c, image_url, source, is_favorite, is_custom
+        sodium, potassium, calcium, iron, vitamin_a, vitamin_c, image_url, source, is_favorite, is_custom, created_by_user_id
       ) VALUES (
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, 'custom', 0, 1
+        ?, ?, ?, ?, ?, ?, ?, 'custom', 0, 1, ?
       )
     `).run(
       id,
@@ -214,7 +223,8 @@ router.post('/custom', (req, res) => {
       parseFloat(iron) || 0,
       parseFloat(vitamin_a) || 0,
       parseFloat(vitamin_c) || 0,
-      image_url || null
+      image_url || null,
+      userId
     );
 
     const created = db.prepare('SELECT * FROM foods WHERE id = ?').get(id);

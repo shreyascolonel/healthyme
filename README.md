@@ -6,6 +6,13 @@
 
 ## ✨ Features
 
+- **Multi-User Authentication & Admin System**:
+  - Clean authentication system to differentiate between household or personal users.
+  - Initial default password (`welcome123`) with forced change on first login (Password + Retype Password).
+  - Admin management dashboard: add new users, reset forgotten passwords, manage shared foods catalog.
+  - **Shared "My Foods"**: Custom foods and recipes created by any user are automatically shared so all household users can search and log them.
+  - Existing database history and settings are pre-migrated to the user **`vinutha`**.
+
 - **Daily Food & Meal Logging**:
   - Full tracking for **Breakfast**, **Lunch**, **Dinner**, **Morning snack**, **Afternoon snack**, and **Evening snack**.
   - Customizable meal slots: enable/disable or reorder meals in Settings.
@@ -66,6 +73,15 @@ npm start
 ```
 
 Open your browser at `http://localhost:4228` (or `http://<your-server-ip>:4228`).
+
+### Default Logins
+
+| Username | Default Password | Role | Notes |
+|---|---|---|---|
+| `vinutha` | `welcome123` | Admin | Contains all migrated historical meal logs & profile data |
+| `admin` | `welcome123` | Admin | System administrator account |
+
+> On first login, each user is automatically prompted to choose a new password. If a user ever forgets their password, an admin can reset it via the **Admin Dashboard** in the top header.
 
 ---
 

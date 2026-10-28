@@ -1,7 +1,9 @@
 import express from 'express';
-import db from '../db.js';
+import db, { getUserProfile } from '../db.js';
+import { optionalAuth } from '../authMiddleware.js';
 
 const router = express.Router();
+router.use(optionalAuth);
 
 const MEAL_TYPES = [
   'breakfast',
@@ -11,6 +13,16 @@ const MEAL_TYPES = [
   'afternoon_snack',
   'evening_snack'
 ];
+
+function getUserId(req) {
+  if (req.user && req.user.is_admin && req.query.spectate_user_id) {
+    const sId = parseInt(req.query.spectate_user_id, 10);
+    if (!isNaN(sId) && sId > 0) return sId;
+  }
+  if (req.user && req.user.id) return req.user.id;
+  const v = db.prepare('SELECT id FROM users WHERE username = ?').get('vinutha');
+  return v ? v.id : 1;
+}
 
 // Helper to compute summary of meal logs
 function calculateNutrientTotals(logs) {
@@ -61,7 +73,7 @@ function calculateNutrientTotals(logs) {
   totals.vitamin_a = Number(totals.vitamin_a.toFixed(1));
   totals.vitamin_c = Number(totals.vitamin_c.toFixed(1));
 
-  // Compute macro percentages (by energy contribution: carb 4 kcal/g, protein 4 kcal/g, fat 9 kcal/g)
+  // Compute macro percentages
   const carbKcal = totals.carbs * 4;
   const fatKcal = totals.fat * 9;
   const protKcal = totals.protein * 4;
@@ -74,7 +86,7 @@ function calculateNutrientTotals(logs) {
   if (macroTotalKcal > 0) {
     carbPct = Math.round((carbKcal / macroTotalKcal) * 100);
     fatPct = Math.round((fatKcal / macroTotalKcal) * 100);
-    protPct = Math.max(0, 100 - carbPct - fatPct); // ensure sum = 100
+    protPct = Math.max(0, 100 - carbPct - fatPct);
   }
 
   return {
@@ -90,14 +102,15 @@ function calculateNutrientTotals(logs) {
 // GET /api/logs?date=YYYY-MM-DD
 router.get('/', (req, res) => {
   try {
+    const userId = getUserId(req);
     const date = req.query.date || new Date().toISOString().split('T')[0];
     
-    // Fetch all logs for this date
+    // Fetch logs for this user and date
     const logs = db.prepare(`
       SELECT * FROM meal_logs 
-      WHERE date = ? 
+      WHERE user_id = ? AND date = ? 
       ORDER BY logged_at ASC, id ASC
-    `).all(date);
+    `).all(userId, date);
 
     // Group logs by meal_type
     const meals = {};
@@ -105,7 +118,6 @@ router.get('/', (req, res) => {
       const mealLogs = logs.filter(l => l.meal_type === type);
       const totals = calculateNutrientTotals(mealLogs);
       
-      // Items summary string (e.g. "Oats Upma, Gold Standard Whey...")
       const itemsSummary = mealLogs.map(l => l.food_name).join(', ');
 
       meals[type] = {
@@ -121,19 +133,8 @@ router.get('/', (req, res) => {
     const dailyTotals = calculateNutrientTotals(logs);
 
     // Fetch user target profile
-    const profile = db.prepare('SELECT * FROM user_profile WHERE id = 1').get() || {
-      calorie_target: 2138,
-      calorie_target_min: 1924,
-      calorie_target_max: 2351,
-      carb_target_grams: 294,
-      fat_target_grams: 59,
-      protein_target_grams: 107,
-      carb_ratio_target: 55,
-      fat_ratio_target: 25,
-      protein_ratio_target: 20
-    };
+    const profile = getUserProfile(userId);
 
-    // Parse enabled meals
     let enabledMeals = MEAL_TYPES;
     try {
       if (profile.enabled_meals) {
@@ -157,6 +158,7 @@ router.get('/', (req, res) => {
 // POST /api/logs - Log an item
 router.post('/', (req, res) => {
   try {
+    const userId = getUserId(req);
     const {
       date,
       meal_type,
@@ -188,15 +190,16 @@ router.post('/', (req, res) => {
 
     const result = db.prepare(`
       INSERT INTO meal_logs (
-        date, meal_type, food_id, food_name, quantity, unit,
+        user_id, date, meal_type, food_id, food_name, quantity, unit,
         calories, carbs, fat, protein, fiber, sugar, saturated_fat,
         sodium, potassium, calcium, iron, vitamin_a, vitamin_c, image_url
       ) VALUES (
-        ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?,
         ?, ?, ?, ?, ?, ?, ?
       )
     `).run(
+      userId,
       date,
       meal_type,
       food_id || null,
@@ -230,6 +233,7 @@ router.post('/', (req, res) => {
 // POST /api/logs/quick - Quick Add Calories
 router.post('/quick', (req, res) => {
   try {
+    const userId = getUserId(req);
     const {
       date,
       meal_type,
@@ -246,13 +250,14 @@ router.post('/quick', (req, res) => {
 
     const result = db.prepare(`
       INSERT INTO meal_logs (
-        date, meal_type, food_id, food_name, quantity, unit,
+        user_id, date, meal_type, food_id, food_name, quantity, unit,
         calories, carbs, fat, protein
       ) VALUES (
-        ?, ?, NULL, ?, 1, 'entry',
+        ?, ?, ?, NULL, ?, 1, 'entry',
         ?, ?, ?, ?
       )
     `).run(
+      userId,
       date,
       meal_type,
       name.trim() || 'Quick Calorie Add',
@@ -272,10 +277,11 @@ router.post('/quick', (req, res) => {
 // PUT /api/logs/:id - Update logged entry
 router.put('/:id', (req, res) => {
   try {
+    const userId = getUserId(req);
     const { id } = req.params;
     const { quantity, calories, carbs, fat, protein } = req.body;
 
-    const existing = db.prepare('SELECT * FROM meal_logs WHERE id = ?').get(id);
+    const existing = db.prepare('SELECT * FROM meal_logs WHERE id = ? AND user_id = ?').get(id, userId);
     if (!existing) {
       return res.status(404).json({ error: 'Log entry not found' });
     }
@@ -290,14 +296,15 @@ router.put('/:id', (req, res) => {
         carbs = ?,
         fat = ?,
         protein = ?
-      WHERE id = ?
+      WHERE id = ? AND user_id = ?
     `).run(
       q,
       calories != null ? Math.round(Number(calories)) : Math.round(existing.calories * ratio),
       carbs != null ? Number(Number(carbs).toFixed(1)) : Number((existing.carbs * ratio).toFixed(1)),
       fat != null ? Number(Number(fat).toFixed(1)) : Number((existing.fat * ratio).toFixed(1)),
       protein != null ? Number(Number(protein).toFixed(1)) : Number((existing.protein * ratio).toFixed(1)),
-      id
+      id,
+      userId
     );
 
     const updated = db.prepare('SELECT * FROM meal_logs WHERE id = ?').get(id);
@@ -310,8 +317,9 @@ router.put('/:id', (req, res) => {
 // DELETE /api/logs/:id - Remove item
 router.delete('/:id', (req, res) => {
   try {
+    const userId = getUserId(req);
     const { id } = req.params;
-    db.prepare('DELETE FROM meal_logs WHERE id = ?').run(id);
+    db.prepare('DELETE FROM meal_logs WHERE id = ? AND user_id = ?').run(id, userId);
     res.json({ success: true, id });
   } catch (err) {
     res.status(500).json({ error: err.message });
