@@ -214,21 +214,25 @@ export async function fetchDailyLogs(date, spectateUserId = null) {
   }
 }
 
-export async function logFoodItem(entry) {
-  const res = await fetch(`${API_BASE}/logs`, {
+export async function logFoodItem(entry, spectateUserId = null) {
+  const sId = spectateUserId || entry.spectate_user_id;
+  const spectateParam = sId ? `?spectate_user_id=${sId}` : '';
+  const res = await fetch(`${API_BASE}/logs${spectateParam}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify(entry)
+    body: JSON.stringify({ ...entry, spectate_user_id: sId })
   });
   if (!res.ok) throw new Error('Failed to log food');
   return res.json();
 }
 
-export async function quickAddCalories(entry) {
-  const res = await fetch(`${API_BASE}/logs/quick`, {
+export async function quickAddCalories(entry, spectateUserId = null) {
+  const sId = spectateUserId || entry.spectate_user_id;
+  const spectateParam = sId ? `?spectate_user_id=${sId}` : '';
+  const res = await fetch(`${API_BASE}/logs/quick${spectateParam}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify(entry)
+    body: JSON.stringify({ ...entry, spectate_user_id: sId })
   });
   if (!res.ok) throw new Error('Failed to quick add calories');
   return res.json();
@@ -373,21 +377,23 @@ export async function fetchHealthStats(date, spectateUserId = null) {
   }
 }
 
-export async function logWater(date, amount_ml) {
-  const res = await fetch(`${API_BASE}/health/water`, {
+export async function logWater(date, amount_ml, spectateUserId = null) {
+  const spectateParam = spectateUserId ? `?spectate_user_id=${spectateUserId}` : '';
+  const res = await fetch(`${API_BASE}/health/water${spectateParam}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ date, amount_ml })
+    body: JSON.stringify({ date, amount_ml, spectate_user_id: spectateUserId })
   });
   if (!res.ok) throw new Error('Failed to log water');
   return res.json();
 }
 
-export async function logWeight(date, weight_kg) {
-  const res = await fetch(`${API_BASE}/health/weight`, {
+export async function logWeight(date, weight_kg, spectateUserId = null) {
+  const spectateParam = spectateUserId ? `?spectate_user_id=${spectateUserId}` : '';
+  const res = await fetch(`${API_BASE}/health/weight${spectateParam}`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ date, weight_kg })
+    body: JSON.stringify({ date, weight_kg, spectate_user_id: spectateUserId })
   });
   if (!res.ok) throw new Error('Failed to log weight');
   return res.json();

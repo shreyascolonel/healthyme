@@ -123,9 +123,14 @@ export default function App() {
     setActiveLogMeal({ mealType, mealTitle });
   };
 
+  const getActiveTargetUserId = () => {
+    return currentUser?.is_admin && spectatingUser ? spectatingUser.id : null;
+  };
+
   const handleLogFood = async (entry) => {
     try {
-      await logFoodItem({ ...entry, date: currentDate });
+      const targetUserId = getActiveTargetUserId();
+      await logFoodItem({ ...entry, date: currentDate, spectate_user_id: targetUserId }, targetUserId);
       await loadDayData(currentDate);
     } catch (err) {
       alert('Failed to log food: ' + err.message);
@@ -134,7 +139,8 @@ export default function App() {
 
   const handleQuickAdd = async (entry) => {
     try {
-      await quickAddCalories({ ...entry, date: currentDate });
+      const targetUserId = getActiveTargetUserId();
+      await quickAddCalories({ ...entry, date: currentDate, spectate_user_id: targetUserId }, targetUserId);
       await loadDayData(currentDate);
     } catch (err) {
       alert('Failed to add calories: ' + err.message);
@@ -152,8 +158,9 @@ export default function App() {
 
   const handleLogWater = async (amount_ml) => {
     try {
-      await logWater(currentDate, amount_ml);
-      const h = await fetchHealthStats(currentDate);
+      const targetUserId = getActiveTargetUserId();
+      await logWater(currentDate, amount_ml, targetUserId);
+      const h = await fetchHealthStats(currentDate, targetUserId);
       setHealthData(h);
     } catch (err) {
       console.error(err);
@@ -162,8 +169,9 @@ export default function App() {
 
   const handleLogWeight = async (weight_kg) => {
     try {
-      await logWeight(currentDate, weight_kg);
-      const h = await fetchHealthStats(currentDate);
+      const targetUserId = getActiveTargetUserId();
+      await logWeight(currentDate, weight_kg, targetUserId);
+      const h = await fetchHealthStats(currentDate, targetUserId);
       setHealthData(h);
     } catch (err) {
       console.error(err);

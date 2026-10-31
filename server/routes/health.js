@@ -6,9 +6,12 @@ const router = express.Router();
 router.use(optionalAuth);
 
 function getUserId(req) {
-  if (req.user && req.user.is_admin && req.query.spectate_user_id) {
-    const sId = parseInt(req.query.spectate_user_id, 10);
-    if (!isNaN(sId) && sId > 0) return sId;
+  if (req.user && req.user.is_admin) {
+    const rawId = req.query?.spectate_user_id || req.body?.spectate_user_id;
+    if (rawId) {
+      const sId = parseInt(rawId, 10);
+      if (!isNaN(sId) && sId > 0) return sId;
+    }
   }
   if (req.user && req.user.id) return req.user.id;
   const v = db.prepare('SELECT id FROM users WHERE username = ?').get('vinutha');

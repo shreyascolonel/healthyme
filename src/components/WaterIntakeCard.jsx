@@ -15,7 +15,6 @@ export default function WaterIntakeCard({ healthData, onLogWater, isSpectating }
   const [justAdded, setJustAdded] = useState(false);
 
   const handleQuickAdd = async (amount) => {
-    if (isSpectating) return;
     try {
       await onLogWater(amount);
       setJustAdded(true);
@@ -78,37 +77,35 @@ export default function WaterIntakeCard({ healthData, onLogWater, isSpectating }
       </div>
 
       {/* Quick Add Buttons */}
-      {!isSpectating && (
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            onClick={() => handleQuickAdd(250)}
-            className="flex-1 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-cyan-500/20 active:scale-95 border border-[#2c2e3c] text-neutral-200 hover:text-cyan-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+250 ml</span>
-          </button>
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={() => handleQuickAdd(250)}
+          className="flex-1 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-cyan-500/20 active:scale-95 border border-[#2c2e3c] text-neutral-200 hover:text-cyan-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5 text-cyan-400" />
+          <span>+250 ml</span>
+        </button>
 
-          <button
-            onClick={() => handleQuickAdd(500)}
-            className="flex-1 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-cyan-500/20 active:scale-95 border border-[#2c2e3c] text-neutral-200 hover:text-cyan-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5 text-cyan-400" />
-            <span>+500 ml</span>
-          </button>
+        <button
+          onClick={() => handleQuickAdd(500)}
+          className="flex-1 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-cyan-500/20 active:scale-95 border border-[#2c2e3c] text-neutral-200 hover:text-cyan-300 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5 text-cyan-400" />
+          <span>+500 ml</span>
+        </button>
 
-          <button
-            onClick={() => setShowCustomModal(true)}
-            className="px-3 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-[#282a37] active:scale-95 border border-[#2c2e3c] text-neutral-300 hover:text-white text-xs font-semibold transition cursor-pointer"
-            title="Custom amount"
-          >
-            Custom
-          </button>
-        </div>
-      )}
+        <button
+          onClick={() => setShowCustomModal(true)}
+          className="px-3 py-2.5 rounded-2xl bg-[#1f212b] hover:bg-[#282a37] active:scale-95 border border-[#2c2e3c] text-neutral-300 hover:text-white text-xs font-semibold transition cursor-pointer"
+          title="Custom amount"
+        >
+          Custom
+        </button>
+      </div>
 
       {isSpectating && (
-        <div className="text-[11px] text-neutral-500 italic text-center pt-1">
-          Water logging is disabled in spectator mode.
+        <div className="text-[10px] text-cyan-400/80 text-center pt-1">
+          Logging water to spectated user's diary
         </div>
       )}
 

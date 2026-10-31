@@ -15,9 +15,12 @@ const MEAL_TYPES = [
 ];
 
 function getUserId(req) {
-  if (req.user && req.user.is_admin && req.query.spectate_user_id) {
-    const sId = parseInt(req.query.spectate_user_id, 10);
-    if (!isNaN(sId) && sId > 0) return sId;
+  if (req.user && req.user.is_admin) {
+    const rawId = req.query?.spectate_user_id || req.body?.spectate_user_id;
+    if (rawId) {
+      const sId = parseInt(rawId, 10);
+      if (!isNaN(sId) && sId > 0) return sId;
+    }
   }
   if (req.user && req.user.id) return req.user.id;
   const v = db.prepare('SELECT id FROM users WHERE username = ?').get('vinutha');
@@ -317,9 +320,13 @@ router.put('/:id', (req, res) => {
 // DELETE /api/logs/:id - Remove item
 router.delete('/:id', (req, res) => {
   try {
-    const userId = getUserId(req);
     const { id } = req.params;
-    db.prepare('DELETE FROM meal_logs WHERE id = ? AND user_id = ?').run(id, userId);
+    if (req.user && req.user.is_admin) {
+      db.prepare('DELETE FROM meal_logs WHERE id = ?').run(id);
+    } else {
+      const userId = getUserId(req);
+      db.prepare('DELETE FROM meal_logs WHERE id = ? AND user_id = ?').run(id, userId);
+    }
     res.json({ success: true, id });
   } catch (err) {
     res.status(500).json({ error: err.message });
